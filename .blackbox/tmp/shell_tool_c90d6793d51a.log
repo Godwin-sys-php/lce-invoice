@@ -1,0 +1,5 @@
+
+> consulat-express-backend@1.0.0 dev
+> node src/server.js
+
+Le Consulat Express API running on port 3001
