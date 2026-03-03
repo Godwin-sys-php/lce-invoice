@@ -1,10 +1,14 @@
-const path = require('path');
-const Database = require('better-sqlite3');
+const mysql = require('mysql2/promise');
 
-const dbPath = process.env.DB_PATH || './database.db';
-const db = new Database(path.resolve(__dirname, '..', dbPath));
+const pool = mysql.createPool({
+  host: process.env.DB_HOST || 'localhost',
+  port: process.env.DB_PORT || 3306,
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD || '',
+  database: process.env.DB_NAME || 'consulat_express',
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
+});
 
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
-
-module.exports = db;
+module.exports = pool;

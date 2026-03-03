@@ -3,80 +3,108 @@ const db = require('../db');
 
 const router = express.Router();
 
-router.get('/', (req, res) => {
-  const products = db.prepare('SELECT * FROM products ORDER BY created_at DESC').all();
-  res.json(products);
+router.get('/', async (req, res) => {
+  try {
+    const [rows] = await db.execute('SELECT * FROM products ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (err) {
+    console.error('Get products error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   const { name, price } = req.body;
 
   if (!name || !name.trim()) {
     return res.status(400).json({ error: 'Product name is required' });
   }
 
-  const result = db.prepare('INSERT INTO products (name, price) VALUES (?, ?)').run(
-    name.trim(),
-    price != null ? price : null
-  );
+  try {
+    const [result] = await db.execute(
+      'INSERT INTO products (name, price) VALUES (?, ?)',
+      [name.trim(), price != null ? price : null]
+    );
 
-  const product = db.prepare('SELECT * FROM products WHERE id = ?').get(result.lastInsertRowid);
-  res.status(201).json(product);
+    const [rows] = await db.execute('SELECT * FROM products WHERE id = ?', [result.insertId]);
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error('Create product error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   const { id } = req.params;
   const { name, price } = req.body;
 
-  const existing = db.prepare('SELECT * FROM products WHERE id = ?').get(id);
-  if (!existing) {
-    return res.status(404).json({ error: 'Product not found' });
+  try {
+    const [existing] = await db.execute('SELECT * FROM products WHERE id = ?', [id]);
+    if (!existing[0]) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Product name is required' });
+    }
+
+    await db.execute(
+      'UPDATE products SET name = ?, price = ? WHERE id = ?',
+      [name.trim(), price != null ? price : null, id]
+    );
+
+    const [rows] = await db.execute('SELECT * FROM products WHERE id = ?', [id]);
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('Update product error:', err);
+    res.status(500).json({ error: 'Server error' });
   }
-
-  if (!name || !name.trim()) {
-    return res.status(400).json({ error: 'Product name is required' });
-  }
-
-  db.prepare('UPDATE products SET name = ?, price = ? WHERE id = ?').run(
-    name.trim(),
-    price != null ? price : null,
-    id
-  );
-
-  const product = db.prepare('SELECT * FROM products WHERE id = ?').get(id);
-  res.json(product);
 });
 
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
   const { id } = req.params;
 
-  const existing = db.prepare('SELECT * FROM products WHERE id = ?').get(id);
-  if (!existing) {
-    return res.status(404).json({ error: 'Product not found' });
-  }
+  try {
+    const [existing] = await db.execute('SELECT * FROM products WHERE id = ?', [id]);
+    if (!existing[0]) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
 
-  const usedInInvoice = db.prepare('SELECT COUNT(*) as count FROM invoice_items WHERE product_id = ?').get(id);
-  if (usedInInvoice.count > 0) {
-    return res.status(409).json({ error: 'Cannot delete product: it is used in existing invoices' });
-  }
+    const [usedInInvoice] = await db.execute(
+      'SELECT COUNT(*) as count FROM invoice_items WHERE product_id = ?',
+      [id]
+    );
+    
+    if (usedInInvoice[0].count > 0) {
+      return res.status(409).json({ error: 'Cannot delete product: it is used in existing invoices' });
+    }
 
-  db.prepare('DELETE FROM products WHERE id = ?').run(id);
-  res.json({ message: 'Product deleted' });
+    await db.execute('DELETE FROM products WHERE id = ?', [id]);
+    res.json({ message: 'Product deleted' });
+  } catch (err) {
+    console.error('Delete product error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
-router.get('/:id/last-price', (req, res) => {
+router.get('/:id/last-price', async (req, res) => {
   const { id } = req.params;
 
-  const row = db.prepare(`
-    SELECT ii.unit_price
-    FROM invoice_items ii
-    JOIN invoices i ON i.id = ii.invoice_id
-    WHERE ii.product_id = ?
-    ORDER BY i.created_at DESC
-    LIMIT 1
-  `).get(id);
+  try {
+    const [rows] = await db.execute(`
+      SELECT ii.unit_price
+      FROM invoice_items ii
+      JOIN invoices i ON i.id = ii.invoice_id
+      WHERE ii.product_id = ?
+      ORDER BY i.created_at DESC
+      LIMIT 1
+    `, [id]);
 
-  res.json({ last_price: row ? row.unit_price : null });
+    res.json({ last_price: rows[0] ? rows[0].unit_price : null });
+  } catch (err) {
+    console.error('Get last price error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
 module.exports = router;

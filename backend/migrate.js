@@ -3,18 +3,28 @@ const fs = require('fs');
 
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
-const Database = require('better-sqlite3');
+const db = require('./src/db');
 
-const dbPath = process.env.DB_PATH || './database.db';
-const db = new Database(path.resolve(__dirname, dbPath));
+async function migrate() {
+  try {
+    const migrationFile = path.join(__dirname, 'migrations', '001_initial.sql');
+    const sql = fs.readFileSync(migrationFile, 'utf-8');
 
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
+    // Split SQL into individual statements and execute them
+    const statements = sql.split(';').filter(s => s.trim());
+    
+    for (const statement of statements) {
+      if (statement.trim()) {
+        await db.execute(statement);
+      }
+    }
 
-const migrationFile = path.join(__dirname, 'migrations', '001_initial.sql');
-const sql = fs.readFileSync(migrationFile, 'utf-8');
+    console.log('Migration completed successfully.');
+    process.exit(0);
+  } catch (err) {
+    console.error('Migration error:', err.message);
+    process.exit(1);
+  }
+}
 
-db.exec(sql);
-
-console.log('Migration completed successfully.');
-db.close();
+migrate();
