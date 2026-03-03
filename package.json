@@ -1,0 +1,13 @@
+{
+  "name": "consulat-express",
+  "version": "1.0.0",
+  "description": "Le Consulat Express - Invoice Management System",
+  "scripts": {
+    "build": "./build.sh",
+    "dev": "concurrently \"cd backend && npm run dev\" \"cd frontend && npm run dev\"",
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
