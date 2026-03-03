@@ -66,7 +66,7 @@ export default function Invoices() {
                   <td className="px-4 py-3">{formatDate(inv.created_at)}</td>
                   <td className="px-4 py-3">
                     <a
-                      href={`http://localhost:3001/pdfs/${inv.invoice_number}.pdf`}
+                      href={`/pdfs/${inv.invoice_number}.pdf`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-black underline hover:no-underline font-medium"

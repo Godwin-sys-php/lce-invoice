@@ -126,7 +126,7 @@ router.post('/', async (req, res) => {
     }
 
     const invoiceNumber = await generateInvoiceNumber();
-    const now = new Date().toISOString();
+    const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
     // Build items with product names for PDF
     const pdfItems = [];
