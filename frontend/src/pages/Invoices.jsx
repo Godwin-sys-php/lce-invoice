@@ -66,7 +66,7 @@ export default function Invoices() {
                   <td className="px-4 py-3">{formatDate(inv.created_at)}</td>
                   <td className="px-4 py-3">
                     <a
-                      href={`/pdfs/${inv.invoice_number}.pdf`}
+                      href={`${import.meta.env.VITE_PDF_URL_PREFIX}${inv.invoice_number}.pdf`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-black underline hover:no-underline font-medium"
@@ -99,7 +99,7 @@ export default function Invoices() {
                 {inv.created_by} · {inv.item_count} article{inv.item_count > 1 ? 's' : ''}
               </div>
               <a
-                href={`http://localhost:3001/pdfs/${inv.invoice_number}.pdf`}
+                href={`${import.meta.env.VITE_PDF_URL_PREFIX}${inv.invoice_number}.pdf`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-block px-4 py-2 bg-black text-white text-xs font-medium rounded-lg hover:bg-[#333] transition-colors"

@@ -11,7 +11,7 @@ echo "🚀 Building Le Consulat Express for production..."
 echo "📦 Building frontend..."
 cd frontend
 npm install
-npm run build
+NODE_ENV=production npm run build
 cd ..
 
 # Copy frontend dist to backend
