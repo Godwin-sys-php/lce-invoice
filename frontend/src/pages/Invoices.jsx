@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import api from '../api';
+import toast from 'react-hot-toast';
+import InvoiceDetailModal from '../components/InvoiceDetailModal';
 
 function formatDate(dateStr) {
   const d = new Date(dateStr);
@@ -11,14 +13,33 @@ function formatDate(dateStr) {
 }
 
 export default function Invoices() {
+  const navigate = useNavigate();
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const fetchInvoices = () => {
     api.get('/invoices')
-      .then((res) => setInvoices(res.data))
+      .then((res) => setInvoices(Array.isArray(res.data) ? res.data : []))
+      .catch(() => setInvoices([]))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchInvoices();
   }, []);
+
+  const [detailInvoiceId, setDetailInvoiceId] = useState(null);
+
+  const handleConvert = async (inv) => {
+    if (!window.confirm(`Convertir le proforma ${inv.invoice_number} en facture définitive ?`)) return;
+    try {
+      await api.post(`/invoices/${inv.id}/convert`);
+      toast.success('Proforma converti en facture');
+      fetchInvoices();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erreur lors de la conversion');
+    }
+  };
 
   if (loading) {
     return <p className="text-gray-500">Chargement...</p>;
@@ -42,17 +63,18 @@ export default function Invoices() {
           <thead>
             <tr className="border-b border-[#e5e5e5]">
               <th className="text-left px-4 py-3 font-medium">N° Facture</th>
+              <th className="text-left px-4 py-3 font-medium">Type</th>
               <th className="text-left px-4 py-3 font-medium">Client</th>
               <th className="text-left px-4 py-3 font-medium">Créé par</th>
               <th className="text-left px-4 py-3 font-medium">Articles</th>
               <th className="text-left px-4 py-3 font-medium">Date</th>
-              <th className="text-left px-4 py-3 font-medium">PDF</th>
+              <th className="text-left px-4 py-3 font-medium">Actions</th>
             </tr>
           </thead>
           <tbody>
             {invoices.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
+                <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
                   Aucune facture
                 </td>
               </tr>
@@ -60,19 +82,50 @@ export default function Invoices() {
               invoices.map((inv) => (
                 <tr key={inv.id} className="border-b border-[#e5e5e5] last:border-b-0 hover:bg-gray-50">
                   <td className="px-4 py-3 font-medium">{inv.invoice_number}</td>
+                  <td className="px-4 py-3">
+                    {inv.type === 'proforma' ? (
+                      <span className="inline-block px-2 py-0.5 text-xs font-medium rounded bg-gray-200 text-gray-600">Proforma</span>
+                    ) : (
+                      <span className="inline-block px-2 py-0.5 text-xs font-medium rounded bg-black text-white">Facture</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3">{inv.client_name}</td>
                   <td className="px-4 py-3">{inv.created_by}</td>
                   <td className="px-4 py-3">{inv.item_count}</td>
                   <td className="px-4 py-3">{formatDate(inv.created_at)}</td>
                   <td className="px-4 py-3">
-                    <a
-                      href={`${import.meta.env.VITE_PDF_URL_PREFIX}${inv.invoice_number}.pdf`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-black underline hover:no-underline font-medium"
-                    >
-                      Voir PDF
-                    </a>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setDetailInvoiceId(inv.id)}
+                        className="px-2.5 py-1 text-xs font-medium border border-[#e5e5e5] rounded hover:bg-gray-50 transition-colors"
+                      >
+                        Voir détail
+                      </button>
+                      <a
+                        href={`${import.meta.env.VITE_PDF_URL_PREFIX}${inv.invoice_number}.pdf`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-black underline hover:no-underline font-medium text-sm"
+                      >
+                        PDF
+                      </a>
+                      {inv.type === 'proforma' && (
+                        <>
+                          <button
+                            onClick={() => navigate(`/invoices/${inv.id}/edit`)}
+                            className="px-2.5 py-1 text-xs font-medium border border-[#e5e5e5] rounded hover:bg-gray-50 transition-colors"
+                          >
+                            Modifier
+                          </button>
+                          <button
+                            onClick={() => handleConvert(inv)}
+                            className="px-2.5 py-1 text-xs font-medium bg-black text-white rounded hover:bg-[#333] transition-colors"
+                          >
+                            Convertir
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))
@@ -91,25 +144,64 @@ export default function Invoices() {
           invoices.map((inv) => (
             <div key={inv.id} className="bg-white border border-[#e5e5e5] rounded-xl p-4 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
               <div className="flex items-center justify-between mb-2">
-                <span className="font-medium text-sm">{inv.invoice_number}</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-sm">{inv.invoice_number}</span>
+                  {inv.type === 'proforma' ? (
+                    <span className="inline-block px-2 py-0.5 text-xs font-medium rounded bg-gray-200 text-gray-600">Proforma</span>
+                  ) : (
+                    <span className="inline-block px-2 py-0.5 text-xs font-medium rounded bg-black text-white">Facture</span>
+                  )}
+                </div>
                 <span className="text-xs text-gray-500">{formatDate(inv.created_at)}</span>
               </div>
               <div className="text-sm text-gray-600 mb-1">{inv.client_name}</div>
               <div className="text-xs text-gray-400 mb-3">
                 {inv.created_by} · {inv.item_count} article{inv.item_count > 1 ? 's' : ''}
               </div>
-              <a
-                href={`${import.meta.env.VITE_PDF_URL_PREFIX}${inv.invoice_number}.pdf`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-block px-4 py-2 bg-black text-white text-xs font-medium rounded-lg hover:bg-[#333] transition-colors"
-              >
-                Voir PDF
-              </a>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={() => setDetailInvoiceId(inv.id)}
+                  className="px-4 py-2 text-xs font-medium border border-[#e5e5e5] rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Voir détail
+                </button>
+                <a
+                  href={`${import.meta.env.VITE_PDF_URL_PREFIX}${inv.invoice_number}.pdf`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block px-4 py-2 bg-black text-white text-xs font-medium rounded-lg hover:bg-[#333] transition-colors"
+                >
+                  Voir PDF
+                </a>
+                {inv.type === 'proforma' && (
+                  <>
+                    <button
+                      onClick={() => navigate(`/invoices/${inv.id}/edit`)}
+                      className="px-4 py-2 text-xs font-medium border border-[#e5e5e5] rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      Modifier
+                    </button>
+                    <button
+                      onClick={() => handleConvert(inv)}
+                      className="px-4 py-2 text-xs font-medium bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                    >
+                      Convertir
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           ))
         )}
       </div>
+
+      {/* Detail Modal */}
+      {detailInvoiceId && (
+        <InvoiceDetailModal
+          invoiceId={detailInvoiceId}
+          onClose={() => setDetailInvoiceId(null)}
+        />
+      )}
     </div>
   );
 }

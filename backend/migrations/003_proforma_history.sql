@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS proforma_history (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  invoice_id INT NOT NULL REFERENCES invoices(id),
+  pdf_path TEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);

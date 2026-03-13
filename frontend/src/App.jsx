@@ -34,6 +34,7 @@ export default function App() {
           >
             <Route path="/invoices" element={<Invoices />} />
             <Route path="/invoices/new" element={<InvoiceNew />} />
+            <Route path="/invoices/:id/edit" element={<InvoiceNew />} />
             <Route path="/products" element={<Products />} />
             <Route path="/clients" element={<Clients />} />
           </Route>

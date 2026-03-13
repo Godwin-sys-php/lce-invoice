@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import api from '../api';
 import toast from 'react-hot-toast';
 import SearchableSelect from '../components/SearchableSelect';
@@ -11,8 +11,23 @@ function formatUSD(amount) {
   });
 }
 
+function formatDateForInput(dateString) {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return '';
+  return date.toISOString().split('T')[0];
+}
+
 export default function InvoiceNew() {
   const navigate = useNavigate();
+  const { id } = useParams();
+  const isEditMode = Boolean(id);
+
+  // Invoice type state (only for new invoices)
+  const [invoiceType, setInvoiceType] = useState('invoice'); // 'invoice' or 'proforma'
+
+  // Loading state for edit mode
+  const [loading, setLoading] = useState(isEditMode);
 
   // Clients
   const [clients, setClients] = useState([]);
@@ -28,7 +43,7 @@ export default function InvoiceNew() {
 
   // Line items
   const [items, setItems] = useState([
-    { product_id: null, quantity: 1, unit_price: '' },
+    { product_id: null, item_date: '', quantity: 1, unit_price: '' },
   ]);
 
   const [submitting, setSubmitting] = useState(false);
@@ -37,6 +52,34 @@ export default function InvoiceNew() {
     api.get('/clients').then((res) => setClients(res.data));
     api.get('/products').then((res) => setProducts(res.data));
   }, []);
+
+  // Fetch invoice data when in edit mode
+  useEffect(() => {
+    if (isEditMode && id) {
+      setLoading(true);
+      api.get(`/invoices/${id}`)
+        .then((res) => {
+          const invoice = res.data;
+          setSelectedClientId(invoice.client_id);
+          setInvoiceType(invoice.type || 'invoice');
+          if (invoice.items && invoice.items.length > 0) {
+            setItems(invoice.items.map((item) => ({
+              product_id: item.product_id,
+              item_date: formatDateForInput(item.item_date) || '',
+              quantity: item.quantity,
+              unit_price: item.unit_price,
+            })));
+          }
+        })
+        .catch((err) => {
+          toast.error(err.response?.data?.error || 'Erreur lors du chargement de la facture');
+          navigate('/invoices');
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    }
+  }, [isEditMode, id, navigate]);
 
   const selectedClient = clients.find((c) => c.id === selectedClientId);
 
@@ -115,7 +158,7 @@ export default function InvoiceNew() {
   };
 
   const addItem = () => {
-    setItems([...items, { product_id: null, quantity: 1, unit_price: '' }]);
+    setItems([...items, { product_id: null, item_date: '', quantity: 1, unit_price: '' }]);
   };
 
   const removeItem = (index) => {
@@ -143,15 +186,24 @@ export default function InvoiceNew() {
 
     setSubmitting(true);
     try {
-      await api.post('/invoices', {
+      const payload = {
         client_id: selectedClientId,
+        type: invoiceType,
         items: validItems.map((item) => ({
           product_id: item.product_id,
+          item_date: item.item_date || null,
           quantity: Number(item.quantity),
           unit_price: Number(item.unit_price),
         })),
-      });
-      toast.success('Facture créée avec succès');
+      };
+
+      if (isEditMode) {
+        await api.put(`/invoices/${id}`, payload);
+        toast.success('Facture mise à jour avec succès');
+      } else {
+        await api.post('/invoices', payload);
+        toast.success('Facture créée avec succès');
+      }
       navigate('/invoices');
     } catch (err) {
       toast.error(err.response?.data?.error || 'Erreur lors de la création');
@@ -165,10 +217,22 @@ export default function InvoiceNew() {
     return p ? p.name : '';
   };
 
+  if (loading) {
+    return (
+      <div className="max-w-4xl">
+        <div className="flex items-center justify-center py-12">
+          <div className="text-gray-500">Chargement...</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-4xl">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-bold">Nouvelle Facture</h2>
+        <h2 className="text-xl font-bold">
+          {isEditMode ? 'Modifier la Facture' : 'Nouvelle Facture'}
+        </h2>
         <button
           onClick={() => navigate('/invoices')}
           className="px-4 py-2.5 text-sm border border-[#e5e5e5] hover:bg-gray-50 transition-colors rounded-lg"
@@ -176,6 +240,39 @@ export default function InvoiceNew() {
           Annuler
         </button>
       </div>
+
+      {/* Invoice Type Toggle (only for new invoices) */}
+      {!isEditMode && (
+        <div className="bg-white border border-[#e5e5e5] shadow-[0_1px_3px_rgba(0,0,0,0.08)] p-4 md:p-6 mb-4 md:mb-6 rounded-xl">
+          <h3 className="text-sm font-bold uppercase tracking-wide mb-4 text-gray-500">
+            Type de document
+          </h3>
+          <div className="flex gap-6">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="invoiceType"
+                value="invoice"
+                checked={invoiceType === 'invoice'}
+                onChange={(e) => setInvoiceType(e.target.value)}
+                className="w-4 h-4 text-black focus:ring-black"
+              />
+              <span className="text-sm font-medium">Facture</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="invoiceType"
+                value="proforma"
+                checked={invoiceType === 'proforma'}
+                onChange={(e) => setInvoiceType(e.target.value)}
+                className="w-4 h-4 text-black focus:ring-black"
+              />
+              <span className="text-sm font-medium">Proforma</span>
+            </label>
+          </div>
+        </div>
+      )}
 
       {/* Step 1: Client */}
       <div className="bg-white border border-[#e5e5e5] shadow-[0_1px_3px_rgba(0,0,0,0.08)] p-4 md:p-6 mb-4 md:mb-6 rounded-xl">
@@ -221,10 +318,11 @@ export default function InvoiceNew() {
 
         {/* Desktop header */}
         <div className="hidden md:grid grid-cols-12 gap-3 text-xs font-medium text-gray-500 uppercase tracking-wide px-1 mb-2">
-          <div className="col-span-5">Produit</div>
+          <div className="col-span-4">Produit</div>
+          <div className="col-span-2">Date</div>
           <div className="col-span-2">Quantité</div>
           <div className="col-span-2">Prix unit. (USD)</div>
-          <div className="col-span-2 text-right">Total</div>
+          <div className="col-span-1 text-right">Total</div>
           <div className="col-span-1"></div>
         </div>
 
@@ -233,7 +331,7 @@ export default function InvoiceNew() {
             <div key={index}>
               {/* Desktop row */}
               <div className="hidden md:grid grid-cols-12 gap-3 items-start">
-                <div className="col-span-5">
+                <div className="col-span-4">
                   <div className="flex gap-1">
                     <div className="flex-1">
                       <SearchableSelect
@@ -263,6 +361,14 @@ export default function InvoiceNew() {
                 </div>
                 <div className="col-span-2">
                   <input
+                    type="date"
+                    value={item.item_date}
+                    onChange={(e) => updateItem(index, 'item_date', e.target.value)}
+                    className="w-full px-3 py-2.5 border border-[#e5e5e5] focus:border-black focus:outline-none text-sm rounded-lg"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <input
                     type="number"
                     min="1"
                     value={item.quantity}
@@ -281,7 +387,7 @@ export default function InvoiceNew() {
                     className="w-full px-3 py-2.5 border border-[#e5e5e5] focus:border-black focus:outline-none text-sm rounded-lg"
                   />
                 </div>
-                <div className="col-span-2 text-right py-2.5 text-sm font-medium">
+                <div className="col-span-1 text-right py-2.5 text-sm font-medium">
                   {item.unit_price !== ''
                     ? formatUSD((Number(item.quantity) || 0) * (Number(item.unit_price) || 0))
                     : '—'}
@@ -335,6 +441,15 @@ export default function InvoiceNew() {
                       +
                     </button>
                   </div>
+                </div>
+                <div className="mb-3">
+                  <label className="block text-xs text-gray-500 mb-1">Date</label>
+                  <input
+                    type="date"
+                    value={item.item_date}
+                    onChange={(e) => updateItem(index, 'item_date', e.target.value)}
+                    className="w-full px-3 py-2.5 border border-[#e5e5e5] focus:border-black focus:outline-none text-sm rounded-lg"
+                  />
                 </div>
                 <div className="grid grid-cols-2 gap-3 mb-3">
                   <div>
@@ -399,7 +514,11 @@ export default function InvoiceNew() {
           disabled={submitting}
           className="px-6 py-2.5 bg-black text-white text-sm font-medium hover:bg-[#333] transition-colors disabled:opacity-50 rounded-lg"
         >
-          {submitting ? 'Génération...' : 'Générer la Facture'}
+          {submitting
+            ? 'Génération...'
+            : isEditMode
+              ? 'Mettre à jour'
+              : 'Générer la Facture'}
         </button>
       </div>
 

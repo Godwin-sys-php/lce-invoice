@@ -17,7 +17,16 @@ function formatUSD(amount) {
   });
 }
 
-function generateInvoicePDF({ invoiceNumber, date, createdBy, client, items }) {
+function formatDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
+function generateInvoicePDF({ invoiceNumber, date, createdBy, client, items, type = 'invoice' }) {
   return new Promise((resolve, reject) => {
     ensurePdfsDir();
 
@@ -52,6 +61,14 @@ function generateInvoicePDF({ invoiceNumber, date, createdBy, client, items }) {
        .text(`No. ${invoiceNumber}`, ML, NUM_Y, {
          width: CW, align: 'right', lineBreak: false,
        });
+
+    // ─── PROFORMA LABEL (if proforma) ────────────────────────────────────────
+    if (type === 'proforma') {
+      doc.font('Helvetica-Bold').fontSize(36).fillColor('#CCCCCC')
+         .text('PROFORMA', ML, NUM_Y + 30, {
+           width: CW, align: 'right', lineBreak: false,
+         });
+    }
 
     // ─── NOM ENTREPRISE : centré horizontalement, avec grande marge verticale ─
     const HEADER_Y = LOGO_BOTTOM + 30;
@@ -97,10 +114,11 @@ function generateInvoicePDF({ invoiceNumber, date, createdBy, client, items }) {
     // ─── TABLEAU ─────────────────────────────────────────────────────────────
     // Colonnes : x de départ + largeur
     const COL = {
-      desc:  { x: ML,        w: 255 },
-      qty:   { x: ML + 255,  w: 60  },
-      price: { x: ML + 315,  w: 90  },
-      total: { x: ML + 405,  w: 90  },
+      desc:  { x: ML,        w: 200 },
+      date:  { x: ML + 200,  w: 70  },
+      qty:   { x: ML + 270,  w: 50  },
+      price: { x: ML + 320,  w: 80  },
+      total: { x: ML + 400,  w: 95  },
     };
     const ROW_H = 30;
     const HEADER_ROW_H = 26;
@@ -112,6 +130,7 @@ function generateInvoicePDF({ invoiceNumber, date, createdBy, client, items }) {
     const H_TEXT_Y = TABLE_Y + 8;
     doc.font('Helvetica-Bold').fontSize(8).fillColor('#666666');
     doc.text('DESCRIPTION', COL.desc.x + 4,  H_TEXT_Y, { width: COL.desc.w  - 8,  lineBreak: false });
+    doc.text('DATE',        COL.date.x,       H_TEXT_Y, { width: COL.date.w,  align: 'center', lineBreak: false });
     doc.text('QTÉ',         COL.qty.x,        H_TEXT_Y, { width: COL.qty.w,   align: 'center', lineBreak: false });
     doc.text('PRIX UNIT.',  COL.price.x,      H_TEXT_Y, { width: COL.price.w, align: 'right',  lineBreak: false });
     doc.text('SOUS-TOTAL',  COL.total.x,      H_TEXT_Y, { width: COL.total.w, align: 'right',  lineBreak: false });
@@ -134,6 +153,7 @@ function generateInvoicePDF({ invoiceNumber, date, createdBy, client, items }) {
         const textY = rowY + 9;
         doc.font('Helvetica').fontSize(10).fillColor('#222222');
         doc.text(item.product_name,      COL.desc.x + 4,  textY, { width: COL.desc.w  - 8,  lineBreak: false });
+        doc.text(formatDate(item.item_date), COL.date.x,   textY, { width: COL.date.w,  align: 'center', lineBreak: false });
         doc.text(String(item.quantity),  COL.qty.x,        textY, { width: COL.qty.w,   align: 'center', lineBreak: false });
         doc.text(formatUSD(item.unit_price), COL.price.x,  textY, { width: COL.price.w, align: 'right',  lineBreak: false });
         doc.text(formatUSD(lineTotal),   COL.total.x,      textY, { width: COL.total.w, align: 'right',  lineBreak: false });
@@ -164,11 +184,12 @@ function generateInvoicePDF({ invoiceNumber, date, createdBy, client, items }) {
     doc.font('Helvetica').fontSize(8).fillColor('#777777')
        .text('326. AV HAUT-COMMANDEMENT REF,',          ML, FY + 13)
        .text("CROISEMENT AVEC L'AVENUE LES PALMIERS",   ML, FY + 24)
-       .text('GOMBE / KINSHASA / RDC',                  ML, FY + 35);
+       .text('GOMBE / KINSHASA / RDC',                  ML, FY + 35)
+       .text('+243 810 001 904',                        ML, FY + 46);
 
     // Droite
     doc.font('Helvetica-Bold').fontSize(11).fillColor('#111111')
-       .text('MERCI POUR VOTRE ACHAT', ML, FY + 18, {
+       .text('MERCI DE VOTRE CONFIANCE', ML, FY + 18, {
          width: CW, align: 'right', lineBreak: false,
        });
 
